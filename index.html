@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鸭蛋没木</title>
+<style>
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body{
+    background:white;
+    padding: 30px;
+    font-family: sans-serif;
+}
+.a{
+    color:blue;
+    background-image: url("https://img.remit.ee/i/d6OkKX7HKmWf");
+    background-size:cover;
+    background-position:center;
+    text-align:center;
+    font-size:50px;
+    width:300px;
+    height:300px;
+    border-radius:50%;
+    margin: 0 auto 30px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+/* 播放器容器 */
+.player-box{
+    max-width: 500px;
+    margin: 0 auto;
+    border: 1px solid #eee;
+    border-radius:16px;
+    padding:20px;
+    background:#fafafa;
+}
+/* 歌词区域 */
+.lyric-wrap{
+    height:220px;
+    overflow:hidden;
+    position:relative;
+    margin-bottom:16px;
+}
+.lyric{
+    transition: transform 0.3s ease;
+    text-align:center;
+    line-height:2.2;
+    font-size:16px;
+    color:#666;
+}
+.lyric-line.active{
+    color:#0066ff;
+    font-weight:bold;
+    font-size:18px;
+}
+/* 进度条 */
+.progress{
+    width:100%;
+    height:6px;
+    background:#ddd;
+    border-radius:3px;
+    cursor:pointer;
+    margin-bottom:12px;
+}
+.progress-bar{
+    height:100%;
+    background:#0066ff;
+    border-radius:3px;
+    width:0%;
+}
+.time-text{
+    display:flex;
+    justify-content:space-between;
+    font-size:13px;
+    color:#777;
+    margin-bottom:16px;
+}
+/* 控制按钮 */
+.controls{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:20px;
+}
+.controls button{
+    padding:8px 16px;
+    border:none;
+    background:#0066ff;
+    color:white;
+    border-radius:8px;
+    cursor:pointer;
+}
+/* 歌曲列表 */
+.music-list{
+    border-top:1px solid #eee;
+    padding-top:16px;
+}
+.music-item{
+    padding:8px 10px;
+    cursor:pointer;
+    border-radius:6px;
+}
+.music-item:hover{
+    background:#eef5ff;
+}
+.music-item.active{
+    background:#0066ff;
+    color:white;
+}
+</style>
+</head>
+<body>
+
+<div class="a">汽水如</div>
+
+<div class="player-box">
+    <div class="lyric-wrap">
+        <div class="lyric" id="lyricBox"></div>
+    </div>
+    <div class="progress" id="progress">
+        <div class="progress-bar" id="bar"></div>
+    </div>
+    <div class="time-text">
+        <span id="current">00:00</span>
+        <span id="duration">00:00</span>
+    </div>
+    <div class="controls">
+        <button id="prev">上一首</button>
+        <button id="playBtn">播放</button>
+        <button id="next">下一首</button>
+    </div>
+    <div class="music-list" id="listBox"></div>
+</div>
+
+<audio id="audio">
+
+<script>
+// 歌曲数据，你在这里增删歌曲，lrc是歌词
+const musicData = [
+    {
+        title: "宝全你在哪，亚群想你了",
+        src: "https://cropgif.net/audio/1792819504483-1cb7b64a-0960-42f5-a662-c5ff7ba18028.mp3",
+        lrc: `[00:00.00] 欢迎来到播放器
+[00:04.00] 这是第一句歌词
+[00:08.00] 点击播放开始聆听
+[00:12.00] 可以拖动进度条跳转`
+    },
+    {
+        title: "示例歌曲2",
+        src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        lrc: `[00:00.00] 第二首歌开始啦
+[00:05.00] 歌词会自动滚动高亮
+[00:10.00] 选中列表切换歌曲`
+    }
+];
+
+let currentIndex = 0;
+const audio = document.getElementById('audio');
+const playBtn = document.getElementById('playBtn');
+const progress = document.getElementById('progress');
+const bar = document.getElementById('bar');
+const currentTimeEl = document.getElementById('current');
+const durationEl = document.getElementById('duration');
+const lyricBox = document.getElementById('lyricBox');
+const listBox = document.getElementById('listBox');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+
+let lyricLines = [];
+
+// 解析lrc歌词
+function parseLrc(lrcStr){
+    const lines = lrcStr.split('\n');
+    const res = [];
+    const reg = /\[(\d{2}):(\d{2})\.(\d{2})\]/;
+    lines.forEach(line=>{
+        const match = line.match(reg);
+        if(match){
+            const min = Number(match[1]);
+            const sec = Number(match[2]);
+            const ms = Number(match[3]);
+            const time = min*60 + sec + ms/100;
+            const text = line.replace(reg,'').trim();
+            if(text) res.push({time, text});
+        }
+    })
+    return res.sort((a,b)=>a.time-b.time);
+}
+
+// 渲染歌曲列表
+function renderList(){
+    listBox.innerHTML = '';
+    musicData.forEach((item,idx)=>{
+        const div = document.createElement('div');
+        div.className = 'music-item' + (idx===currentIndex?' active':'');
+        div.innerText = item.title;
+        div.onclick = ()=>{
+            currentIndex = idx;
+            loadMusic();
+        }
+        listBox.appendChild(div);
+    })
+}
+
+// 加载当前歌曲
+function loadMusic(){
+    const m = musicData[currentIndex];
+    audio.src = m.src;
+    lyricLines = parseLrc(m.lrc);
+    renderLyric();
+    renderList();
+}
+
+// 渲染歌词DOM
+function renderLyric(){
+    lyricBox.innerHTML = '';
+    lyricLines.forEach(line=>{
+        const div = document.createElement('div');
+        div.className = 'lyric-line';
+        div.innerText = line.text;
+        lyricBox.appendChild(div);
+    })
+}
+
+// 格式化时间
+function fmtTime(s){
+    const m = Math.floor(s/60);
+    const sec = Math.floor(s%60);
+    return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+}
+
+// 更新进度+歌词高亮
+audio.addEventListener('timeupdate',()=>{
+    const pct = (audio.currentTime / audio.duration)*100;
+    bar.style.width = pct+'%';
+    currentTimeEl.innerText = fmtTime(audio.currentTime);
+
+    // 找当前歌词
+    let activeIdx = 0;
+    for(let i=0;i<lyricLines.length;i++){
+        if(lyricLines[i].time <= audio.currentTime){
+            activeIdx = i;
+        }else break;
+    }
+    const allLine = document.querySelectorAll('.lyric-line');
+    allLine.forEach((el,i)=>{
+        el.classList.toggle('active', i===activeIdx);
+    })
+    // 滚动歌词
+    lyricBox.style.transform = `translateY(${-activeIdx * 2.2 * 16}px)`;
+})
+
+audio.addEventListener('loadedmetadata',()=>{
+    durationEl.innerText = fmtTime(audio.duration);
+})
+
+// 播放暂停
+playBtn.onclick = ()=>{
+    if(audio.paused){
+        audio.play();
+        playBtn.innerText = '暂停';
+    }else{
+        audio.pause();
+        playBtn.innerText = '播放';
+    }
+}
+
+// 点击进度条跳转
+progress.onclick = (e)=>{
+    const rect = progress.getBoundingClientRect();
+    const pos = (e.clientX - rect.left)/rect.width;
+    audio.currentTime = pos * audio.duration;
+}
+
+// 上一首
+prevBtn.onclick = ()=>{
+    currentIndex = (currentIndex -1 + musicData.length) % musicData.length;
+    loadMusic();
+    audio.play();
+    playBtn.innerText = '暂停';
+}
+// 下一首
+nextBtn.onclick = ()=>{
+    currentIndex = (currentIndex +1) % musicData.length;
+    loadMusic();
+    audio.play();
+    playBtn.innerText = '暂停';
+}
+
+// 播放结束自动下一首
+audio.onended = ()=>{
+    nextBtn.click();
+}
+
+// 初始化
+loadMusic();
+</script>
+
+</body>
+</html>
